@@ -1,5 +1,5 @@
-const CACHE = 'money-v1';
-const ASSETS = ['./', 'index.html', 'style.css', 'app.js', 'manifest.webmanifest', 'icon.svg'];
+const CACHE = 'money-v2';
+const ASSETS = ['./', 'index.html', 'style.css', 'app.js', 'cloud.js', 'firebase-config.js', 'manifest.webmanifest', 'icon.svg'];
 self.addEventListener('install', e => {
   e.waitUntil(caches.open(CACHE).then(c => c.addAll(ASSETS)));
   self.skipWaiting();
@@ -10,10 +10,14 @@ self.addEventListener('activate', e => {
 });
 self.addEventListener('fetch', e => {
   if (e.request.method !== 'GET') return;
+  const host = new URL(e.request.url);
+  if (host.origin !== location.origin && host.hostname !== 'www.gstatic.com') return; // Firebase-API direkt, nicht über den Service Worker
   e.respondWith(
     fetch(e.request)
       .then(res => {
-        if (res.ok && new URL(e.request.url).origin === location.origin) {
+        const url = new URL(e.request.url);
+        // Eigene Dateien und das Firebase-SDK zwischenspeichern (offline nutzbar), keine API-Aufrufe
+        if (res.ok && (url.origin === location.origin || url.hostname === 'www.gstatic.com')) {
           const copy = res.clone();
           caches.open(CACHE).then(c => c.put(e.request, copy));
         }

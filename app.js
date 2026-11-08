@@ -1,4 +1,4 @@
-'use strict';
+import { firebaseConfig } from './firebase-config.js';
 
 /* ---------- Konstanten ---------- */
 const CATEGORIES = [
@@ -37,8 +37,33 @@ function load() {
   return structuredClone(defaults);
 }
 function save() {
+  if (cloud) return; // in der Cloud speichert jede Aktion selbst
   try { localStorage.setItem(STORE_KEY, JSON.stringify(state)); }
   catch (e) { toast('Speichern fehlgeschlagen – Speicher voll oder blockiert.', 'over'); }
+}
+
+/* ---------- Speicher-Schicht (lokal oder Cloud) ---------- */
+let cloud = null;      // Firebase-Schnittstelle, solange angemeldet
+let cloudApi = null;   // geladene Firebase-Schnittstelle
+const newId = () => crypto.randomUUID?.() || String(Date.now()) + Math.random().toString(36).slice(2);
+const cloudFail = err => { console.error(err); toast('Cloud-Speichern fehlgeschlagen: ' + (err?.code || err?.message || err), 'over', 5000); };
+
+function putExpense(e) {
+  const i = state.expenses.findIndex(x => x.id === e.id);
+  if (i >= 0) state.expenses[i] = e; else state.expenses.push(e);
+  if (cloud) cloud.putExpense(e).catch(cloudFail); else save();
+}
+function removeExpense(id) {
+  state.expenses = state.expenses.filter(e => e.id !== id);
+  if (cloud) cloud.removeExpense(id).catch(cloudFail); else save();
+}
+function putSettings(s) {
+  state.settings = s;
+  if (cloud) cloud.putSettings(s).catch(cloudFail); else save();
+}
+async function replaceAll(data) {
+  state = data;
+  if (cloud) await cloud.replaceAll(data.expenses, data.settings).catch(cloudFail); else save();
 }
 
 /* ---------- Helfer ---------- */
@@ -190,13 +215,13 @@ function settleUp(bal) {
   const who = bal > 0 ? `${pName()} zahlt dir ${money(bal)}` : `Du zahlst ${pName()} ${money(-bal)}`;
   if (!confirm(`Saldo ausgleichen?\n${who}.\n\nEs wird ein Ausgleichs-Eintrag erstellt.`)) return;
   // Ausgleich als Eintrag: wer schuldet, "zahlt" für den anderen
-  state.expenses.push({
-    id: crypto.randomUUID?.() || String(Date.now() + Math.random()),
+  putExpense({
+    id: newId(),
     amount: round2(Math.abs(bal)), date: isoDate(new Date()), category: 'other',
     note: 'Ausgleich', payer: bal > 0 ? 'partner' : 'me', split: bal > 0 ? 'me' : 'partner',
     settlement: true, createdAt: Date.now(),
   });
-  save(); render(); toast('Saldo ausgeglichen ✓', 'ok');
+  render(); toast('Saldo ausgeglichen ✓', 'ok');
 }
 
 /* Journal */
@@ -398,19 +423,15 @@ form.addEventListener('submit', ev => {
   if (!Number.isFinite(amount) || amount <= 0) { toast('Bitte einen gültigen Betrag eingeben.', 'over'); form.amount.focus(); return; }
   const before = limitStatus();
   const data = { amount, date: form.date.value, category: ui.cat, note: form.note.value.trim(), split: ui.split, payer: ui.payer };
-  if (form.id.value) {
-    const i = state.expenses.findIndex(e => e.id === form.id.value);
-    if (i >= 0) state.expenses[i] = { ...state.expenses[i], ...data };
-  } else {
-    state.expenses.push({ id: crypto.randomUUID?.() || String(Date.now() + Math.random()), createdAt: Date.now(), ...data });
-  }
-  save(); closeModal(); render();
+  const old = form.id.value && state.expenses.find(e => e.id === form.id.value);
+  putExpense(old ? { ...old, ...data } : { id: newId(), createdAt: Date.now(), ...data });
+  closeModal(); render();
   notifyLimitChanges(before, limitStatus());
 });
 $('#btn-delete').onclick = () => {
   if (!confirm('Diese Ausgabe wirklich löschen?')) return;
-  state.expenses = state.expenses.filter(e => e.id !== form.id.value);
-  save(); closeModal(); render(); toast('Ausgabe gelöscht');
+  removeExpense(form.id.value);
+  closeModal(); render(); toast('Ausgabe gelöscht');
 };
 
 function notifyLimitChanges(before, after) {
@@ -433,8 +454,8 @@ sform.addEventListener('submit', ev => {
   ev.preventDefault();
   const fd = Object.fromEntries(new FormData(sform));
   for (const k of ['limitDay', 'limitWeek', 'limitMonth']) fd[k] = fd[k] === '' ? '' : String(Math.max(0, parseFloat(fd[k]) || 0));
-  state.settings = { ...state.settings, ...fd };
-  save(); render(); toast('Einstellungen gespeichert ✓', 'ok');
+  putSettings({ ...state.settings, ...fd });
+  render(); toast('Einstellungen gespeichert ✓', 'ok');
 });
 
 function download(name, content, type) {
@@ -458,14 +479,14 @@ $('#import-file').addEventListener('change', async ev => {
     const data = JSON.parse(await file.text());
     if (!Array.isArray(data.expenses)) throw new Error();
     if (!confirm(`${data.expenses.length} Einträge importieren? Aktuelle Daten werden ersetzt.`)) return;
-    state = { expenses: data.expenses, settings: { ...defaults.settings, ...data.settings } };
-    save(); fillSettings(); render(); toast('Backup importiert ✓', 'ok');
+    await replaceAll({ expenses: data.expenses, settings: { ...defaults.settings, ...data.settings } });
+    fillSettings(); render(); toast('Backup importiert ✓', 'ok');
   } catch { toast('Ungültige Backup-Datei.', 'over'); }
   ev.target.value = '';
 });
-$('#btn-reset').onclick = () => {
-  if (!confirm('Wirklich ALLE Ausgaben und Einstellungen löschen?')) return;
-  state = structuredClone(defaults); save(); fillSettings(); render(); toast('Alle Daten gelöscht');
+$('#btn-reset').onclick = async () => {
+  if (!confirm(cloud ? 'Wirklich ALLE Ausgaben und Einstellungen löschen – auch in der Cloud?' : 'Wirklich ALLE Ausgaben und Einstellungen löschen?')) return;
+  await replaceAll(structuredClone(defaults)); fillSettings(); render(); toast('Alle Daten gelöscht');
 };
 
 /* ---------- Toasts ---------- */
@@ -476,7 +497,120 @@ function toast(msg, type = '', ms = 2600) {
   setTimeout(() => { el.style.transition = 'opacity .3s'; el.style.opacity = '0'; setTimeout(() => el.remove(), 300); }, ms);
 }
 
+/* ---------- Cloud: Anmeldung & Synchronisation ---------- */
+const authEl = $('#auth');
+const authForm = $('#auth-form');
+const AUTH_ERRORS = {
+  'auth/invalid-email': 'Ungültige E-Mail-Adresse.',
+  'auth/invalid-credential': 'E-Mail oder Passwort ist falsch.',
+  'auth/wrong-password': 'E-Mail oder Passwort ist falsch.',
+  'auth/user-not-found': 'E-Mail oder Passwort ist falsch.',
+  'auth/email-already-in-use': 'Für diese E-Mail gibt es schon ein Konto – bitte anmelden.',
+  'auth/weak-password': 'Das Passwort muss mindestens 6 Zeichen haben.',
+  'auth/missing-password': 'Bitte ein Passwort eingeben.',
+  'auth/too-many-requests': 'Zu viele Versuche. Bitte kurz warten.',
+  'auth/network-request-failed': 'Keine Verbindung zum Internet.',
+  'auth/operation-not-allowed': 'E-Mail-Anmeldung ist in Firebase noch nicht aktiviert.',
+  'auth/unauthorized-domain': 'Diese Adresse ist in Firebase nicht als autorisierte Domain eingetragen.',
+};
+const authMsg = (txt, ok) => { const m = $('#auth-msg'); m.textContent = txt; m.className = 'auth-msg' + (ok ? ' ok' : ''); };
+const authErr = e => authMsg(AUTH_ERRORS[e?.code] || 'Fehler: ' + (e?.code || e?.message || e));
+
+function showAuth(mode) {
+  authEl.hidden = false;
+  $('#auth-loading').hidden = mode !== 'loading';
+  authForm.hidden = mode !== 'form';
+}
+async function withBusy(fn) {
+  $$('#auth-form button').forEach(b => b.disabled = true);
+  try { await fn(); } catch (e) { authErr(e); } finally { $$('#auth-form button').forEach(b => b.disabled = false); }
+}
+authForm.addEventListener('submit', ev => {
+  ev.preventDefault();
+  withBusy(() => cloudApi.signIn(authForm.email.value.trim(), authForm.password.value));
+});
+$('#auth-signup').onclick = () => {
+  if (!authForm.reportValidity()) return;
+  withBusy(() => cloudApi.signUp(authForm.email.value.trim(), authForm.password.value));
+};
+$('#auth-reset').onclick = () => {
+  const email = authForm.email.value.trim();
+  if (!email) return authMsg('Bitte zuerst die E-Mail-Adresse eingeben.');
+  withBusy(async () => { await cloudApi.resetPassword(email); authMsg('E-Mail zum Zurücksetzen wurde gesendet.', true); });
+};
+$('#btn-logout').onclick = async () => {
+  if (!confirm('Abmelden? Deine Daten bleiben in der Cloud gespeichert.')) return;
+  await cloudApi.signOut();
+};
+
+function updateAccountCard(user) {
+  $('#account-card').hidden = !firebaseConfig;
+  $('#account-status').innerHTML = user
+    ? `<span class="sync-dot"></span>Angemeldet als <b>${esc(user.email)}</b>. Alles wird automatisch in der Cloud gespeichert.`
+    : 'Nicht angemeldet.';
+  $('#btn-logout').hidden = !user;
+  $('#data-hint').textContent = user
+    ? 'Deine Daten liegen in der Cloud und sind auf allen Geräten aktuell, auf denen du angemeldet bist.'
+    : 'Alle Daten bleiben lokal auf diesem Gerät. Exportiere regelmäßig ein Backup.';
+}
+
+let unsubscribe = null;
+function startSync(user) {
+  const localData = load(); // lokale Daten aus der Zeit vor der Cloud (für die Übernahme)
+  const migrateKey = 'money.migrated.' + user.uid;
+  let first = true;
+  state = structuredClone(defaults);
+  cloud = cloudApi;
+  unsubscribe = cloud.subscribe({
+    onExpenses(list, meta) {
+      state.expenses = list;
+      render();
+      if (first && !meta.fromCache) {
+        first = false;
+        let done = false;
+        try { done = localStorage.getItem(migrateKey) === '1'; } catch {}
+        try { localStorage.setItem(migrateKey, '1'); } catch {}
+        if (!done && !list.length && localData.expenses.length &&
+            confirm(`Auf diesem Gerät sind ${localData.expenses.length} Ausgaben gespeichert. In die Cloud übernehmen?`)) {
+          replaceAll(localData).then(() => { fillSettings(); render(); toast('Lokale Daten in die Cloud übernommen ✓', 'ok'); });
+        }
+      }
+    },
+    onSettings(s) {
+      state.settings = { ...defaults.settings, ...(s || {}) };
+      if (!sform.contains(document.activeElement)) fillSettings();
+      render();
+    },
+    onError: cloudFail,
+  });
+}
+function stopSync() {
+  unsubscribe?.(); unsubscribe = null; cloud = null;
+  state = structuredClone(defaults);
+  fillSettings(); render();
+}
+
 /* ---------- Start ---------- */
 fillSettings();
 render();
+updateAccountCard(null);
+
+if (firebaseConfig) {
+  showAuth('loading');
+  import('./cloud.js')
+    .then(m => m.initCloud(firebaseConfig))
+    .then(api => {
+      cloudApi = api;
+      api.onAuth(user => {
+        updateAccountCard(user);
+        if (user) { authEl.hidden = true; authForm.reset(); authMsg(''); if (!cloud) startSync(user); }
+        else { if (cloud) stopSync(); showAuth('form'); }
+      });
+    })
+    .catch(err => {
+      console.error(err);
+      authEl.hidden = true;
+      toast('Cloud nicht erreichbar. Die App läuft vorerst nur lokal.', 'over', 6000);
+    });
+}
 if ('serviceWorker' in navigator && location.protocol !== 'file:') navigator.serviceWorker.register('sw.js').catch(() => {});

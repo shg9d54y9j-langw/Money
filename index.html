@@ -130,9 +130,15 @@
           <button class="btn primary" type="submit">Speichern</button>
         </form>
 
+        <div class="card form" id="account-card" hidden>
+          <h2 class="section-title flush">Cloud-Konto</h2>
+          <p class="small" id="account-status"></p>
+          <button class="btn" id="btn-logout" hidden>Abmelden</button>
+        </div>
+
         <div class="card form">
           <h2 class="section-title flush">Daten</h2>
-          <p class="muted small">Alle Daten bleiben lokal auf diesem Gerät. Exportiere regelmäßig ein Backup.</p>
+          <p class="muted small" id="data-hint">Alle Daten bleiben lokal auf diesem Gerät. Exportiere regelmäßig ein Backup.</p>
           <div class="btn-row">
             <button class="btn" id="btn-export">Backup exportieren (JSON)</button>
             <button class="btn" id="btn-csv">CSV exportieren</button>
@@ -194,8 +200,26 @@
     </form>
   </div>
 
+  <!-- ANMELDUNG (nur mit Cloud) -->
+  <div class="auth" id="auth" hidden>
+    <div class="auth-card">
+      <img src="icon.svg" alt="" class="auth-logo" />
+      <h1>Money</h1>
+      <p class="muted">Deine Ausgaben, sicher in der Cloud gespeichert.</p>
+      <p class="muted" id="auth-loading">Verbinde …</p>
+      <form id="auth-form" hidden>
+        <label>E-Mail<input type="email" name="email" autocomplete="username" required /></label>
+        <label>Passwort<input type="password" name="password" autocomplete="current-password" minlength="6" required /></label>
+        <p class="auth-msg" id="auth-msg"></p>
+        <button type="submit" class="btn primary">Anmelden</button>
+        <button type="button" class="btn" id="auth-signup">Neues Konto erstellen</button>
+        <button type="button" class="link-btn" id="auth-reset">Passwort vergessen?</button>
+      </form>
+    </div>
+  </div>
+
   <div class="toast-wrap" id="toasts"></div>
 
-  <script src="app.js"></script>
+  <script type="module" src="app.js"></script>
 </body>
 </html>
