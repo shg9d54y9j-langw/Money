@@ -1,0 +1,9 @@
+{
+  "name": "Money – Ausgaben-Journal",
+  "short_name": "Money",
+  "start_url": "./",
+  "display": "standalone",
+  "background_color": "#f6f7fb",
+  "theme_color": "#f6f7fb",
+  "icons": [{ "src": "icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }]
+}

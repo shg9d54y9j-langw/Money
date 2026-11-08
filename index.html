@@ -1,0 +1,201 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cut" />
+  <meta name="theme-color" content="#f6f7fb" />
+  <title>Money – Ausgaben-Journal</title>
+  <link rel="manifest" href="manifest.webmanifest" />
+  <link rel="icon" href="icon.svg" type="image/svg+xml" />
+  <link rel="apple-touch-icon" href="icon.svg" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <div class="app">
+    <header class="topbar">
+      <div>
+        <p class="eyebrow" id="today-label"></p>
+        <h1 id="view-title">Übersicht</h1>
+      </div>
+      <button class="icon-btn" id="btn-add-top" aria-label="Ausgabe hinzufügen">＋</button>
+    </header>
+
+    <main>
+      <!-- ÜBERSICHT -->
+      <section class="view active" id="view-dashboard">
+        <div id="alerts"></div>
+
+        <div class="hero card">
+          <p class="muted">Diesen Monat ausgegeben <span class="basis-hint"></span></p>
+          <p class="hero-amount" id="hero-month">0,00 €</p>
+          <div class="hero-row">
+            <div><span class="muted">Heute</span><strong id="hero-day">0,00 €</strong></div>
+            <div><span class="muted">Diese Woche</span><strong id="hero-week">0,00 €</strong></div>
+          </div>
+        </div>
+
+        <h2 class="section-title">Limits</h2>
+        <div class="card" id="limit-bars"></div>
+
+        <h2 class="section-title">Partner-Saldo</h2>
+        <div class="card balance" id="balance-card"></div>
+
+        <div class="section-head">
+          <h2 class="section-title">Zuletzt</h2>
+          <button class="link-btn" data-goto="journal">Alle ansehen</button>
+        </div>
+        <div class="card list" id="recent-list"></div>
+      </section>
+
+      <!-- JOURNAL -->
+      <section class="view" id="view-journal">
+        <div class="toolbar">
+          <input type="search" id="search" placeholder="Suchen (Notiz, Kategorie) …" />
+          <select id="filter-cat"><option value="">Alle Kategorien</option></select>
+          <select id="filter-split">
+            <option value="">Alle</option>
+            <option value="me">Nur für mich</option>
+            <option value="shared">Geteilt</option>
+            <option value="partner">Für Partnerin</option>
+          </select>
+          <input type="month" id="filter-month" />
+        </div>
+        <div id="journal-summary" class="journal-summary"></div>
+        <div id="journal-list"></div>
+      </section>
+
+      <!-- AUSWERTUNG -->
+      <section class="view" id="view-stats">
+        <div class="segmented" id="period-seg">
+          <button data-period="week">Woche</button>
+          <button data-period="month" class="active">Monat</button>
+          <button data-period="year">Jahr</button>
+        </div>
+        <div class="period-nav">
+          <button class="icon-btn small" id="period-prev" aria-label="Zurück">‹</button>
+          <strong id="period-label"></strong>
+          <button class="icon-btn small" id="period-next" aria-label="Weiter">›</button>
+        </div>
+
+        <div class="stat-tiles">
+          <div class="card tile"><span class="muted">Gesamt</span><strong id="st-total"></strong></div>
+          <div class="card tile"><span class="muted">Mein Anteil</span><strong id="st-mine"></strong></div>
+          <div class="card tile"><span class="muted" id="st-partner-label">Anteil Partnerin</span><strong id="st-partner"></strong></div>
+          <div class="card tile"><span class="muted">Ø pro Tag</span><strong id="st-avg"></strong></div>
+        </div>
+
+        <h2 class="section-title">Nach Bereichen</h2>
+        <div class="card donut-card">
+          <div id="donut"></div>
+          <div id="cat-legend" class="cat-legend"></div>
+        </div>
+
+        <h2 class="section-title" id="bars-title">Verlauf</h2>
+        <div class="card"><div id="bars"></div></div>
+
+        <h2 class="section-title">Für wen?</h2>
+        <div class="card" id="split-breakdown"></div>
+      </section>
+
+      <!-- EINSTELLUNGEN -->
+      <section class="view" id="view-settings">
+        <form id="settings-form" class="card form">
+          <h2 class="section-title flush">Allgemein</h2>
+          <label>Dein Name<input type="text" name="myName" maxlength="30" /></label>
+          <label>Name deiner Partnerin<input type="text" name="partnerName" maxlength="30" /></label>
+          <label>Währung
+            <select name="currency">
+              <option value="EUR">Euro (€)</option>
+              <option value="CHF">Franken (CHF)</option>
+              <option value="USD">Dollar ($)</option>
+              <option value="GBP">Pfund (£)</option>
+            </select>
+          </label>
+
+          <h2 class="section-title">Limits</h2>
+          <p class="muted small">Leer lassen = kein Limit. Ab 80 % gibt es eine Vorwarnung.</p>
+          <div class="grid3">
+            <label>Tag<input type="number" name="limitDay" min="0" step="0.01" inputmode="decimal" /></label>
+            <label>Woche<input type="number" name="limitWeek" min="0" step="0.01" inputmode="decimal" /></label>
+            <label>Monat<input type="number" name="limitMonth" min="0" step="0.01" inputmode="decimal" /></label>
+          </div>
+          <label>Limits zählen
+            <select name="limitBasis">
+              <option value="share">Nur meinen Anteil (geteilt = Hälfte)</option>
+              <option value="paid">Alles, was ich bezahlt habe</option>
+            </select>
+          </label>
+          <button class="btn primary" type="submit">Speichern</button>
+        </form>
+
+        <div class="card form">
+          <h2 class="section-title flush">Daten</h2>
+          <p class="muted small">Alle Daten bleiben lokal auf diesem Gerät. Exportiere regelmäßig ein Backup.</p>
+          <div class="btn-row">
+            <button class="btn" id="btn-export">Backup exportieren (JSON)</button>
+            <button class="btn" id="btn-csv">CSV exportieren</button>
+            <label class="btn file-btn">Backup importieren<input type="file" id="import-file" accept="application/json" hidden /></label>
+          </div>
+          <button class="btn danger" id="btn-reset">Alle Daten löschen</button>
+        </div>
+      </section>
+    </main>
+
+    <nav class="tabbar">
+      <button class="tab active" data-view="dashboard"><svg viewBox="0 0 24 24"><path d="M3 11.5 12 4l9 7.5V20a1 1 0 0 1-1 1h-5v-6h-6v6H4a1 1 0 0 1-1-1z"/></svg>Übersicht</button>
+      <button class="tab" data-view="journal"><svg viewBox="0 0 24 24"><path d="M5 4h11a3 3 0 0 1 3 3v13H8a3 3 0 0 1-3-3zM9 9h6M9 13h6"/></svg>Journal</button>
+      <button class="fab" id="btn-add" aria-label="Ausgabe hinzufügen">＋</button>
+      <button class="tab" data-view="stats"><svg viewBox="0 0 24 24"><path d="M12 3v9h9A9 9 0 1 1 12 3z"/><path d="M15 3.5A9 9 0 0 1 20.5 9H15z"/></svg>Auswertung</button>
+      <button class="tab" data-view="settings"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>Einstellungen</button>
+    </nav>
+  </div>
+
+  <!-- MODAL -->
+  <div class="modal-backdrop" id="modal" hidden>
+    <form class="sheet" id="expense-form" autocomplete="off">
+      <div class="sheet-head">
+        <h2 id="modal-title">Neue Ausgabe</h2>
+        <button type="button" class="icon-btn small" id="modal-close" aria-label="Schließen">✕</button>
+      </div>
+      <input type="hidden" name="id" />
+      <div class="amount-input">
+        <input type="text" name="amount" inputmode="decimal" placeholder="0,00" required />
+        <span class="cur" id="cur-symbol">€</span>
+      </div>
+
+      <p class="field-label">Kategorie</p>
+      <div class="chips" id="cat-chips"></div>
+
+      <p class="field-label">Für wen?</p>
+      <div class="segmented full" id="split-seg">
+        <button type="button" data-split="me" class="active">Nur ich</button>
+        <button type="button" data-split="shared">Wir beide</button>
+        <button type="button" data-split="partner" class="partner-label">Partnerin</button>
+      </div>
+
+      <p class="field-label">Wer hat bezahlt?</p>
+      <div class="segmented full" id="payer-seg">
+        <button type="button" data-payer="me" class="active">Ich</button>
+        <button type="button" data-payer="partner" class="partner-label">Partnerin</button>
+      </div>
+      <p class="muted small split-hint" id="split-hint"></p>
+
+      <div class="grid2">
+        <label>Datum<input type="date" name="date" required /></label>
+        <label>Notiz<input type="text" name="note" maxlength="80" placeholder="z. B. Wocheneinkauf" /></label>
+      </div>
+
+      <div class="btn-row">
+        <button type="button" class="btn danger ghost" id="btn-delete" hidden>Löschen</button>
+        <button type="submit" class="btn primary grow">Speichern</button>
+      </div>
+    </form>
+  </div>
+
+  <div class="toast-wrap" id="toasts"></div>
+
+  <script src="app.js"></script>
+</body>
+</html>
